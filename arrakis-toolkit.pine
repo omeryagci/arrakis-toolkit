@@ -1,0 +1,1489 @@
+// Arrakis Toolkit — kişisel kullanım
+
+//@version=6
+indicator("Arrakis Toolkit", "Arrakis", overlay = true, max_bars_back = 100, max_boxes_count = 500, max_lines_count = 500, max_labels_count = 500)
+
+// ───────────────────────── HTF mumları ─────────────────────────
+// En üstte: grafikteki HTF mumlarına çift tıklayınca zaman dilimi hemen buradan seçilir.
+string G_HTF    = "HTF mumları"
+bool   HTF_ON   = input.bool(true, "HTF mumlarını göster", group = G_HTF)
+string HTF1_SEL = input.string("Otomatik", "Üst grup", options = ["Otomatik", "Elle"], inline = "htf1", group = G_HTF)
+string HTF1_TF  = input.timeframe("60", "", inline = "htf1", group = G_HTF)
+string HTF2_SEL = input.string("Otomatik", "Alt grup", options = ["Otomatik", "Elle"], inline = "htf2", group = G_HTF)
+string HTF2_TF  = input.timeframe("D", "", inline = "htf2", group = G_HTF)
+int    HTF_N    = input.int(60, "Mum sayısı", minval = 10, maxval = 100, group = G_HTF)
+int    HTF_OFF  = input.int(10, "Grafikten uzaklık (bar)", minval = 1, maxval = 200, group = G_HTF)
+int    HTF_STEP = input.int(1, "Mum aralığı (bar)", minval = 1, maxval = 5, tooltip = "1: mini mumlar ana grafiğin mumlarıyla aynı sıklıkta durur.", group = G_HTF)
+int    HTF_PX   = input.int(4, "Mum kalınlığı (piksel)", minval = 1, maxval = 10, tooltip = "Grafiği çok uzaklaştırınca mumlar birbirine girerse azalt.", group = G_HTF)
+int    HTF_H    = input.int(120, "Dikey boy (%)", minval = 100, maxval = 200, step = 5, tooltip = "100: son 100 mumun yüksekliğine sığar. Büyüdükçe mini grafikler yukarı ve aşağı uzar, genişlikleri değişmez.", group = G_HTF)
+color  HTF_UP   = input.color(#2E0602, "Mumlar", inline = "htfc", group = G_HTF)
+color  HTF_DN   = input.color(#C93800, "", inline = "htfc", group = G_HTF)
+color  HTF_WICK = input.color(#2E0602, "", inline = "htfc", group = G_HTF)
+bool   HTF_GRID = input.bool(true, "Izgara", group = G_HTF)
+bool   HTF_LAST = input.bool(true, "Son fiyat çizgisi", group = G_HTF)
+bool   HTF_TIME = input.bool(true, "Zaman ekseni", group = G_HTF)
+bool   HTF_FVGS = input.bool(true, "FVG'ler", group = G_HTF)
+bool   HTF_SMT  = input.bool(true, "SMT", tooltip = "Otomatik: karşı sembol grafikteki sembole göre seçilir. Eşleşme yoksa SMT çizilmez ve mini grafik başlığında SMT yazmaz; o zaman Elle seç.", group = G_HTF)
+string SMT_SEL  = input.string("Otomatik", "Karşı sembol", options = ["Otomatik", "Elle"], inline = "smt", group = G_HTF)
+string SMT_SYM  = input.symbol("OANDA:GBPUSD", "", inline = "smt", group = G_HTF)
+bool   SMT_INV  = input.bool(false, "Elle seçilen sembol ters ilişkili", group = G_HTF)
+int    SMT_P    = input.int(2, "SMT swing gücü (mum)", minval = 1, maxval = 5, group = G_HTF)
+int    SMT_MAX  = input.int(5, "SMT grup başına en fazla", minval = 1, maxval = 20, tooltip = "Yön başına en yeni uyumsuzluklar çizilir.", group = G_HTF)
+color  SMT_BULL = input.color(#2E4A8C, "SMT renkleri", inline = "smtc", group = G_HTF)
+color  SMT_BEAR = input.color(#9B1D30, "", inline = "smtc", group = G_HTF)
+bool   SMT_MON  = input.bool(true, "Ana grafikte SMT", tooltip = "Otomatik: 1m grafikte 15m, 5m'de 1h, 15m'de 4h, 1h ve 4h'te 1D. Karşı sembol, swing gücü ve renkler yukarıdaki SMT ayarlarından gelir.", group = G_HTF)
+string SMT_MSEL = input.string("Otomatik", "Ana grafik SMT zaman dilimi", options = ["Otomatik", "Elle"], inline = "smtm", group = G_HTF)
+string SMT_MTF  = input.timeframe("60", "", inline = "smtm", group = G_HTF)
+color  SMT_MBULL = input.color(#1D4ED8, "Ana grafik SMT renkleri", inline = "smtmc", group = G_HTF)
+color  SMT_MBEAR = input.color(#C93800, "", inline = "smtmc", group = G_HTF)
+int    SMT_MMAX = input.int(5, "Ana grafik SMT en fazla", minval = 1, maxval = 20, tooltip = "Yön başına en yeni uyumsuzluklar çizilir.", group = G_HTF)
+
+// ───────────────────────── Genel ─────────────────────────
+string G_GEN = "Genel"
+string VIEW  = input.string("Temiz", "Görünüm", options = ["Temiz", "Tam"], tooltip = "Temiz: hiçbir şey kaybolmaz, geçmiş günler ve uzak üst zaman dilimi FVG'leri soluklaşır. Tam: hepsi aynı güçte çizilir.", group = G_GEN)
+bool   CLEAN = VIEW == "Temiz"
+bool   ALL_ON   = input.bool(true, "Kutuları göster", group = G_GEN)
+string TZ       = input.string("America/New_York", "Saat dilimi", options = ["America/New_York"], group = G_GEN)
+string MAX_TF   = input.timeframe("60", "En fazla bu zaman diliminde göster", group = G_GEN)
+int    EXT_DAYS = input.int(2, "Seviye uzama sınırı (işlem günü)", minval = 1, maxval = 20, group = G_GEN)
+string LBL_SIZE = input.string("Normal", "Seviye yazı boyutu", options = ["Çok küçük", "Küçük", "Normal"], group = G_GEN)
+string TAKEN    = input.string("İkisi", "Alınan seviye", options = ["İkisi", "Soluklaştır", "✕", "Kapalı"], tooltip = "Fitil değen seviye soluklaşır ve/veya değdiği yere ✕ konur.", group = G_GEN)
+
+string S_SOLID = "Düz"
+string S_DASH  = "Kesikli"
+
+// ───────────────────────── Kutu 1 ─────────────────────────
+string G1 = "Kutu 1"
+bool   o1  = input.bool(true, "", inline = "1a", group = G1)
+string n1  = input.string("AS", "İsim", inline = "1a", group = G1)
+string t1  = input.session("2000-0000", "Saat", inline = "1a", group = G1)
+bool   fo1 = input.bool(false, "Dolgu", inline = "1b", group = G1)
+color  fc1 = input.color(color.new(#2E4A8C, 85), "", inline = "1b", group = G1)
+bool   bo1 = input.bool(true, "Kenar", inline = "1c", group = G1)
+color  bc1 = input.color(#2E4A8C, "", inline = "1c", group = G1)
+string bs1 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "1c", group = G1)
+bool   lo1 = input.bool(true, "Seviye", inline = "1d", group = G1)
+color  lc1 = input.color(#2E4A8C, "", inline = "1d", group = G1)
+string ls1 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "1d", group = G1)
+int    lw1 = input.int(1, "", minval = 1, maxval = 4, inline = "1d", group = G1)
+
+// ───────────────────────── Kutu 2 ─────────────────────────
+string G2 = "Kutu 2"
+bool   o2  = input.bool(true, "", inline = "2a", group = G2)
+string n2  = input.string("LO", "İsim", inline = "2a", group = G2)
+string t2  = input.session("0200-0500", "Saat", inline = "2a", group = G2)
+bool   fo2 = input.bool(false, "Dolgu", inline = "2b", group = G2)
+color  fc2 = input.color(color.new(#1E7F78, 85), "", inline = "2b", group = G2)
+bool   bo2 = input.bool(true, "Kenar", inline = "2c", group = G2)
+color  bc2 = input.color(#1E7F78, "", inline = "2c", group = G2)
+string bs2 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "2c", group = G2)
+bool   lo2 = input.bool(true, "Seviye", inline = "2d", group = G2)
+color  lc2 = input.color(#1E7F78, "", inline = "2d", group = G2)
+string ls2 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "2d", group = G2)
+int    lw2 = input.int(1, "", minval = 1, maxval = 4, inline = "2d", group = G2)
+
+// ───────────────────────── Kutu 3 ─────────────────────────
+string G3 = "Kutu 3"
+bool   o3  = input.bool(true, "", inline = "3a", group = G3)
+string n3  = input.string("NY AM", "İsim", inline = "3a", group = G3)
+string t3F = input.session("0700-1000", "Forex", inline = "3s", group = G3)
+string t3I = input.session("0830-1100", "Endeks", inline = "3s", group = G3)
+string m3  = input.string("Otomatik", "Piyasa", options = ["Otomatik", "Forex", "Endeks"], tooltip = "Otomatik: forex pariteleri, kur vadelileri ve DXY'de Forex saati, diğer tüm sembollerde Endeks saati kullanılır.", group = G3)
+bool   fo3 = input.bool(false, "Dolgu", inline = "3b", group = G3)
+color  fc3 = input.color(color.new(#5B2A4E, 85), "", inline = "3b", group = G3)
+bool   bo3 = input.bool(true, "Kenar", inline = "3c", group = G3)
+color  bc3 = input.color(#5B2A4E, "", inline = "3c", group = G3)
+string bs3 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "3c", group = G3)
+bool   lo3 = input.bool(true, "Seviye", inline = "3d", group = G3)
+color  lc3 = input.color(#5B2A4E, "", inline = "3d", group = G3)
+string ls3 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "3d", group = G3)
+int    lw3 = input.int(1, "", minval = 1, maxval = 4, inline = "3d", group = G3)
+
+// ───────────────────────── Kutu 4 ─────────────────────────
+string G4 = "Kutu 4"
+bool   o4  = input.bool(true, "", inline = "4a", group = G4)
+string n4  = input.string("CBDR", "İsim", inline = "4a", group = G4)
+string t4  = input.session("1400-2000", "Saat", inline = "4a", group = G4)
+bool   fo4 = input.bool(false, "Dolgu", inline = "4b", group = G4)
+color  fc4 = input.color(color.new(#6B6560, 85), "", inline = "4b", group = G4)
+bool   bo4 = input.bool(true, "Kenar", inline = "4c", group = G4)
+color  bc4 = input.color(#6B6560, "", inline = "4c", group = G4)
+string bs4 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "4c", group = G4)
+bool   lo4 = input.bool(true, "Seviye", inline = "4d", group = G4)
+color  lc4 = input.color(#6B6560, "", inline = "4d", group = G4)
+string ls4 = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "4d", group = G4)
+int    lw4 = input.int(1, "", minval = 1, maxval = 4, inline = "4d", group = G4)
+
+// ───────────────────────── Ayırıcılar ─────────────────────────
+string G_SEP     = "Ayırıcılar"
+bool   SEP_FUT   = input.bool(true, "Sıradaki ayırıcıyı göster", group = G_SEP)
+string SEP_LBL   = input.string("Normal", "Ayırıcı yazı boyutu", options = ["Çok küçük", "Küçük", "Normal"], group = G_SEP)
+
+string G_H  = "Saatlik ayırıcı"
+bool   hOn  = input.bool(true, "", inline = "ha", group = G_H)
+string hTxt = input.string("", "Yazı", inline = "ha", group = G_H)
+color  hCol = input.color(color.new(#8C7A5B, 50), "Çizgi", inline = "hb", group = G_H)
+string hSty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "hb", group = G_H)
+int    hW   = input.int(1, "", minval = 1, maxval = 4, inline = "hb", group = G_H)
+string hTf  = input.timeframe("15", "En fazla bu zaman diliminde göster", group = G_H)
+
+string G_M  = "09:30 makro ayırıcı"
+bool   mOn  = input.bool(true, "", inline = "ma", group = G_M)
+string mTxt = input.string("", "Yazı", inline = "ma", group = G_M)
+color  mCol = input.color(color.new(#9C6B12, 50), "Çizgi", inline = "mb", group = G_M)
+string mSty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "mb", group = G_M)
+int    mW   = input.int(1, "", minval = 1, maxval = 4, inline = "mb", group = G_M)
+string mTf  = input.timeframe("15", "En fazla bu zaman diliminde göster", group = G_M)
+
+string G_D  = "Günlük ayırıcı"
+bool   dOn  = input.bool(true, "", inline = "da", group = G_D)
+string dTxt = input.string("", "Yazı", inline = "da", group = G_D)
+color  dCol = input.color(#6B6560, "Çizgi", inline = "db", group = G_D)
+string dSty = input.string("Noktalı", "", options = ["Düz", "Kesikli", "Noktalı"], inline = "db", group = G_D)
+int    dW   = input.int(2, "", minval = 1, maxval = 4, inline = "db", group = G_D)
+string dTf  = input.timeframe("240", "En fazla bu zaman diliminde göster", group = G_D)
+
+string G_W  = "Haftalık ayırıcı"
+bool   wOn  = input.bool(true, "", inline = "wa", group = G_W)
+string wTxt = input.string("", "Yazı", inline = "wa", group = G_W)
+color  wCol = input.color(color.new(#5B2A4E, 50), "Çizgi", inline = "wb", group = G_W)
+string wSty = input.string(S_SOLID, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "wb", group = G_W)
+int    wW   = input.int(2, "", minval = 1, maxval = 4, inline = "wb", group = G_W)
+string wTf  = input.timeframe("D", "En fazla bu zaman diliminde göster", group = G_W)
+
+string X_TIP = "Saat ve günler sadece 'Saat + günler' türünde kullanılır."
+
+string GX1   = "Ekstra ayırıcı 1"
+bool   x1On  = input.bool(false, "", inline = "x1a", group = GX1)
+string x1Txt = input.string("", "Yazı", inline = "x1a", group = GX1)
+string x1Md  = input.string("Saat + günler", "Tür", options = ["Saat + günler", "Aylık", "Üç aylık", "Yıllık"], tooltip = X_TIP, inline = "x1b", group = GX1)
+int    x1H   = input.int(9, "Saat", minval = 0, maxval = 23, inline = "x1c", group = GX1)
+int    x1M   = input.int(30, ":", minval = 0, maxval = 59, inline = "x1c", group = GX1)
+bool   x1d2  = input.bool(true, "Pzt", inline = "x1d", group = GX1)
+bool   x1d3  = input.bool(true, "Sal", inline = "x1d", group = GX1)
+bool   x1d4  = input.bool(true, "Çar", inline = "x1d", group = GX1)
+bool   x1d5  = input.bool(true, "Per", inline = "x1d", group = GX1)
+bool   x1d6  = input.bool(true, "Cum", inline = "x1d", group = GX1)
+bool   x1d7  = input.bool(false, "Cmt", inline = "x1d", group = GX1)
+bool   x1d1  = input.bool(false, "Paz", inline = "x1d", group = GX1)
+color  x1Col = input.color(#8C7A5B, "Çizgi", inline = "x1e", group = GX1)
+string x1Sty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "x1e", group = GX1)
+int    x1W   = input.int(1, "", minval = 1, maxval = 4, inline = "x1e", group = GX1)
+string x1Tf  = input.timeframe("60", "En fazla bu zaman diliminde göster", group = GX1)
+
+string GX2   = "Ekstra ayırıcı 2"
+bool   x2On  = input.bool(false, "", inline = "x2a", group = GX2)
+string x2Txt = input.string("", "Yazı", inline = "x2a", group = GX2)
+string x2Md  = input.string("Aylık", "Tür", options = ["Saat + günler", "Aylık", "Üç aylık", "Yıllık"], tooltip = X_TIP, inline = "x2b", group = GX2)
+int    x2H   = input.int(9, "Saat", minval = 0, maxval = 23, inline = "x2c", group = GX2)
+int    x2M   = input.int(30, ":", minval = 0, maxval = 59, inline = "x2c", group = GX2)
+bool   x2d2  = input.bool(true, "Pzt", inline = "x2d", group = GX2)
+bool   x2d3  = input.bool(true, "Sal", inline = "x2d", group = GX2)
+bool   x2d4  = input.bool(true, "Çar", inline = "x2d", group = GX2)
+bool   x2d5  = input.bool(true, "Per", inline = "x2d", group = GX2)
+bool   x2d6  = input.bool(true, "Cum", inline = "x2d", group = GX2)
+bool   x2d7  = input.bool(false, "Cmt", inline = "x2d", group = GX2)
+bool   x2d1  = input.bool(false, "Paz", inline = "x2d", group = GX2)
+color  x2Col = input.color(#8C7A5B, "Çizgi", inline = "x2e", group = GX2)
+string x2Sty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "x2e", group = GX2)
+int    x2W   = input.int(1, "", minval = 1, maxval = 4, inline = "x2e", group = GX2)
+string x2Tf  = input.timeframe("60", "En fazla bu zaman diliminde göster", group = GX2)
+
+string GX3   = "Ekstra ayırıcı 3"
+bool   x3On  = input.bool(false, "", inline = "x3a", group = GX3)
+string x3Txt = input.string("", "Yazı", inline = "x3a", group = GX3)
+string x3Md  = input.string("Yıllık", "Tür", options = ["Saat + günler", "Aylık", "Üç aylık", "Yıllık"], tooltip = X_TIP, inline = "x3b", group = GX3)
+int    x3H   = input.int(9, "Saat", minval = 0, maxval = 23, inline = "x3c", group = GX3)
+int    x3M   = input.int(30, ":", minval = 0, maxval = 59, inline = "x3c", group = GX3)
+bool   x3d2  = input.bool(true, "Pzt", inline = "x3d", group = GX3)
+bool   x3d3  = input.bool(true, "Sal", inline = "x3d", group = GX3)
+bool   x3d4  = input.bool(true, "Çar", inline = "x3d", group = GX3)
+bool   x3d5  = input.bool(true, "Per", inline = "x3d", group = GX3)
+bool   x3d6  = input.bool(true, "Cum", inline = "x3d", group = GX3)
+bool   x3d7  = input.bool(false, "Cmt", inline = "x3d", group = GX3)
+bool   x3d1  = input.bool(false, "Paz", inline = "x3d", group = GX3)
+color  x3Col = input.color(#8C7A5B, "Çizgi", inline = "x3e", group = GX3)
+string x3Sty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "x3e", group = GX3)
+int    x3W   = input.int(1, "", minval = 1, maxval = 4, inline = "x3e", group = GX3)
+string x3Tf  = input.timeframe("60", "En fazla bu zaman diliminde göster", group = GX3)
+
+// ───────────────────────── Önceki gün / hafta / ay seviyeleri ─────────────────────────
+string G_PD  = "Önceki gün / hafta / ay seviyeleri"
+bool   pdOn  = input.bool(true, "PDH/PDL", inline = "pd1", group = G_PD)
+color  pdCol = input.color(#2E4A8C, "", inline = "pd1", group = G_PD)
+string pdSty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "pd1", group = G_PD)
+int    pdW   = input.int(1, "", minval = 1, maxval = 4, inline = "pd1", group = G_PD)
+int    pdN   = input.int(5, "Son kaç gün", minval = 1, maxval = 50, inline = "pd2", group = G_PD)
+string pdTf  = input.timeframe("240", "En fazla", inline = "pd2", group = G_PD)
+bool   pwOn  = input.bool(true, "PWH/PWL", inline = "pw1", group = G_PD)
+color  pwCol = input.color(#5B2A4E, "", inline = "pw1", group = G_PD)
+string pwSty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "pw1", group = G_PD)
+int    pwW   = input.int(1, "", minval = 1, maxval = 4, inline = "pw1", group = G_PD)
+int    pwN   = input.int(4, "Son kaç hafta", minval = 1, maxval = 50, inline = "pw2", group = G_PD)
+string pwTf  = input.timeframe("D", "En fazla", inline = "pw2", group = G_PD)
+bool   pmOn  = input.bool(true, "PMH/PML", inline = "pm1", group = G_PD)
+color  pmCol = input.color(#2E0602, "", inline = "pm1", group = G_PD)
+string pmSty = input.string(S_DASH, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "pm1", group = G_PD)
+int    pmW   = input.int(1, "", minval = 1, maxval = 4, inline = "pm1", group = G_PD)
+int    pmN   = input.int(3, "Son kaç ay", minval = 1, maxval = 50, inline = "pm2", group = G_PD)
+string pmTf  = input.timeframe("W", "En fazla", inline = "pm2", group = G_PD)
+
+// ───────────────────────── Açılış boşlukları ─────────────────────────
+string G_GAP  = "Açılış boşlukları (NWOG / NDOG)"
+bool   GAP_CE = input.bool(true, "Orta çizgi (CE)", group = G_GAP)
+bool   nwOn   = input.bool(true, "NWOG", inline = "nw1", group = G_GAP)
+color  nwFill = input.color(color.new(#6B6560, 50), "", inline = "nw1", group = G_GAP)
+color  nwLine = input.color(#6B6560, "", inline = "nw1", group = G_GAP)
+int    nwN    = input.int(5, "Son kaç tane", minval = 1, maxval = 20, inline = "nw2", group = G_GAP)
+string nwTf   = input.timeframe("240", "En fazla", inline = "nw2", group = G_GAP)
+bool   ndOn   = input.bool(true, "NDOG", inline = "nd1", group = G_GAP)
+color  ndFill = input.color(color.new(#6B6560, 75), "", inline = "nd1", group = G_GAP)
+color  ndLine = input.color(#6B6560, "", inline = "nd1", group = G_GAP)
+int    ndN    = input.int(3, "Son kaç tane", minval = 1, maxval = 20, inline = "nd2", group = G_GAP)
+string ndTf   = input.timeframe("60", "En fazla", inline = "nd2", group = G_GAP)
+
+// ───────────────────────── Midnight Open ─────────────────────────
+string G_MO  = "Midnight Open"
+bool   moOn  = input.bool(true, "Midnight Open", tooltip = "00:00 NY mumunun açılış fiyatı. Çizgi 17:00 NY'ye kadar uzar. 00:00'da mum açılmayan sembol ve zaman dilimlerinde çizilmez.", inline = "mo1", group = G_MO)
+color  moCol = input.color(#9C6B12, "", inline = "mo1", group = G_MO)
+string moSty = input.string(S_SOLID, "", options = ["Düz", "Kesikli", "Noktalı"], inline = "mo1", group = G_MO)
+int    moW   = input.int(1, "", minval = 1, maxval = 4, inline = "mo1", group = G_MO)
+int    moN   = input.int(5, "Son kaç gün", minval = 1, maxval = 50, inline = "mo2", group = G_MO)
+string moTf  = input.timeframe("60", "En fazla", inline = "mo2", group = G_MO)
+
+// ───────────────────────── FVG ─────────────────────────
+string G_FVG  = "FVG"
+bool   FVG_ON = input.bool(true, "FVG'leri göster", group = G_FVG)
+bool   FVG_CE = input.bool(true, "Orta çizgi (CE)", group = G_FVG)
+bool   FVG_TM = input.bool(true, "Kesinleşme zamanını yaz", tooltip = "FVG'nin 3. mumunun kapandığı an (NY saati). Gün içi FVG'lerde gün ve saat, günlük ve üstünde tarih yazar.", group = G_FVG)
+bool   fv1On  = input.bool(false, "1m", inline = "fv1", group = G_FVG)
+color  fv1Col = input.color(#6B6560, "", inline = "fv1", group = G_FVG)
+string fv1Ext = input.string("1 gün", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv1", group = G_FVG)
+bool   fv2On  = input.bool(false, "5m", inline = "fv2", group = G_FVG)
+color  fv2Col = input.color(#1E7F78, "", inline = "fv2", group = G_FVG)
+string fv2Ext = input.string("3 gün", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv2", group = G_FVG)
+bool   fv3On  = input.bool(false, "15m", inline = "fv3", group = G_FVG)
+color  fv3Col = input.color(#9C6B12, "", inline = "fv3", group = G_FVG)
+string fv3Ext = input.string("5 gün", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv3", group = G_FVG)
+bool   fv4On  = input.bool(false, "30m", inline = "fv4", group = G_FVG)
+color  fv4Col = input.color(#9C6B12, "", inline = "fv4", group = G_FVG)
+string fv4Ext = input.string("1 hafta", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv4", group = G_FVG)
+bool   fv5On  = input.bool(true, "1h", inline = "fv5", group = G_FVG)
+color  fv5Col = input.color(#9B1D30, "", inline = "fv5", group = G_FVG)
+string fv5Ext = input.string("2 hafta", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv5", group = G_FVG)
+bool   fv6On  = input.bool(true, "4h", inline = "fv6", group = G_FVG)
+color  fv6Col = input.color(#4F6F2A, "", inline = "fv6", group = G_FVG)
+string fv6Ext = input.string("1 ay", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv6", group = G_FVG)
+bool   fv7On  = input.bool(false, "8h", inline = "fv7", group = G_FVG)
+color  fv7Col = input.color(#4F6F2A, "", inline = "fv7", group = G_FVG)
+string fv7Ext = input.string("2 ay", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv7", group = G_FVG)
+bool   fv8On  = input.bool(true, "1D", inline = "fv8", group = G_FVG)
+color  fv8Col = input.color(#2E4A8C, "", inline = "fv8", group = G_FVG)
+string fv8Ext = input.string("6 ay", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv8", group = G_FVG)
+bool   fv9On  = input.bool(true, "1W", inline = "fv9", group = G_FVG)
+color  fv9Col = input.color(#5B2A4E, "", inline = "fv9", group = G_FVG)
+string fv9Ext = input.string("1 yıl", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv9", group = G_FVG)
+bool   fv10On  = input.bool(false, "1M", inline = "fv10", group = G_FVG)
+color  fv10Col = input.color(#2E0602, "", inline = "fv10", group = G_FVG)
+string fv10Ext = input.string("4 yıl", "Maks. uzatma", options = ["1 gün", "2 gün", "3 gün", "5 gün", "1 hafta", "2 hafta", "1 ay", "2 ay", "3 ay", "6 ay", "1 yıl", "4 yıl", "Sınırsız"], inline = "fv10", group = G_FVG)
+
+// ───────────────────────── Tipler ─────────────────────────
+type Slot
+    bool   on
+    string name
+    string sess
+    bool   fillOn
+    color  fillCol
+    bool   bordOn
+    color  bordCol
+    string bordStyle
+    bool   lvlOn
+    color  lvlCol
+    string lvlStyle
+    int    lvlWidth
+    bool   active = false
+    float  hi     = na
+    float  lo     = na
+    int    hiBar  = na
+    int    loBar  = na
+    box    bx     = na
+    line   hiLn   = na
+    line   loLn   = na
+    label  hiLb   = na
+    label  loLb   = na
+    label  ttl    = na
+
+// Seans bittikten sonra sağa uzayan, temas veya süre dolunca duran seviye
+type Level
+    line  ln
+    label lb
+    float price
+    bool  isHigh
+    int   startBar
+    int   endTod
+    int   days = 0
+    color col  = na
+    label xLb  = na
+    bool  dead = false
+
+// ───────────────────────── Yardımcılar ─────────────────────────
+lineStyle(string s) =>
+    switch s
+        "Kesikli" => line.style_dashed
+        "Noktalı" => line.style_dotted
+        => line.style_solid
+
+labelSize(string s) =>
+    switch s
+        "Çok küçük" => size.tiny
+        "Normal"    => size.normal
+        => size.small
+
+// Forex'te pip; pip tanımı olmayan sembollerde fiyat farkı "pts" olarak yazılır
+bool  isMetal = str.startswith(syminfo.ticker, "XAU") or str.startswith(syminfo.ticker, "XAG")
+bool  isForex = syminfo.type == "forex" and not isMetal
+float pipSize = syminfo.currency == "JPY" ? 0.01 : 0.0001
+
+slotTitle(Slot s) =>
+    float rng = s.hi - s.lo
+    s.name + " • " + str.tostring(isForex ? rng / pipSize : rng, "#.0") + (isForex ? " pips" : " pts")
+
+// NY AM saati sembole göre seçilir
+bool   fxFut  = syminfo.type == "futures" and str.contains(" 6E 6B 6J 6A 6C 6S 6N M6E M6B M6A DX ", " " + syminfo.root + " ")
+bool   fxHour = m3 == "Otomatik" ? isForex or fxFut or syminfo.ticker == "DXY" : m3 == "Forex"
+string t3     = fxHour ? t3F : t3I
+
+// Yazı çizginin sonunda ve üstünde durur
+newLevelLabel(Slot s, float y, string suffix) =>
+    label.new(bar_index, y, s.name + suffix, style = label.style_label_lower_right, color = color.new(color.black, 100), textcolor = s.lvlCol, size = labelSize(LBL_SIZE))
+
+// Fitil değen seviye: TAKEN ayarına göre soluklaşır ve/veya değdiği bara ✕ konur
+method markTaken(Level lv) =>
+    if TAKEN == "İkisi" or TAKEN == "Soluklaştır"
+        lv.ln.set_color(color.new(lv.col, 75))
+        lv.lb.set_textcolor(color.new(lv.col, 75))
+    if TAKEN == "İkisi" or TAKEN == "✕"
+        lv.xLb := label.new(bar_index, lv.price, "✕", style = label.style_label_center, color = color.new(color.black, 100), textcolor = lv.col, size = size.small)
+
+method kill(Level lv) =>
+    lv.dead := true
+    line.delete(lv.ln)
+    label.delete(lv.lb)
+    label.delete(lv.xLb)
+
+// ───────────────────────── Bar bilgisi ─────────────────────────
+int  tod           = hour(time, TZ) * 60 + minute(time, TZ)
+int  dow           = dayofweek(time, TZ)
+bool newTradingDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ) and dow != dayofweek.saturday and dow != dayofweek.sunday
+bool tfAllowed     = timeframe.in_seconds() <= timeframe.in_seconds(MAX_TF)
+bool slotDay       = bar_index > 0 and timeframe.change("D")
+
+var array<Level> pending = array.new<Level>()
+
+// ───────────────────────── Kutu motoru ─────────────────────────
+// Biten seans silinmez, sadece soluklaşır; seviyeleri uzamaya devam eder
+method fade(Slot s) =>
+    if CLEAN and not na(s.bx)
+        s.bx.set_border_color(s.bordOn ? color.new(s.bordCol, 65) : na)
+        s.bx.set_bgcolor(s.fillOn ? color.new(s.fillCol, 94) : na)
+        s.ttl.set_textcolor(color.new(s.bordCol, 65))
+        if s.lvlOn
+            line.set_color(s.hiLn, color.new(s.lvlCol, 70))
+            line.set_color(s.loLn, color.new(s.lvlCol, 70))
+            label.set_textcolor(s.hiLb, color.new(s.lvlCol, 70))
+            label.set_textcolor(s.loLb, color.new(s.lvlCol, 70))
+
+method update(Slot s, bool allowed) =>
+    bool inSession = not na(time(timeframe.period, s.sess + ":1234567", TZ))
+    bool inS       = inSession and s.on and allowed
+    if slotDay and not s.active
+        s.fade()
+    if inS and not s.active
+        s.fade()
+        s.hi    := high
+        s.lo    := low
+        s.hiBar := bar_index
+        s.loBar := bar_index
+        s.bx    := box.new(bar_index, high, bar_index, low, border_color = s.bordOn ? s.bordCol : na, border_width = s.bordOn ? 1 : 0, border_style = lineStyle(s.bordStyle), bgcolor = s.fillOn ? s.fillCol : na)
+        s.ttl := label.new(bar_index, high, slotTitle(s), style = label.style_label_lower_left, color = color.new(color.black, 100), textcolor = s.bordCol, size = labelSize(LBL_SIZE))
+        if s.lvlOn
+            s.hiLn := line.new(bar_index, high, bar_index, high, color = s.lvlCol, style = lineStyle(s.lvlStyle), width = s.lvlWidth)
+            s.loLn := line.new(bar_index, low, bar_index, low, color = s.lvlCol, style = lineStyle(s.lvlStyle), width = s.lvlWidth)
+            s.hiLb := newLevelLabel(s, high, ".H")
+            s.loLb := newLevelLabel(s, low, ".L")
+    else if inS
+        if high > s.hi
+            s.hi    := high
+            s.hiBar := bar_index
+        if low < s.lo
+            s.lo    := low
+            s.loBar := bar_index
+        s.bx.set_top(s.hi)
+        s.bx.set_bottom(s.lo)
+        s.bx.set_right(bar_index)
+        s.ttl.set_y(s.hi)
+        s.ttl.set_text(slotTitle(s))
+        if s.lvlOn
+            s.hiLn.set_xy1(s.hiBar, s.hi)
+            s.hiLn.set_xy2(bar_index, s.hi)
+            s.loLn.set_xy1(s.loBar, s.lo)
+            s.loLn.set_xy2(bar_index, s.lo)
+            s.hiLb.set_xy(bar_index, s.hi)
+            s.loLb.set_xy(bar_index, s.lo)
+    else if s.active and s.lvlOn
+        // Seans bitti: seviyeler artık temas/süre kontrolüyle uzar
+        pending.push(Level.new(s.hiLn, s.hiLb, s.hi, true, bar_index, tod, 0, s.lvlCol))
+        pending.push(Level.new(s.loLn, s.loLb, s.lo, false, bar_index, tod, 0, s.lvlCol))
+    s.active := inS
+
+var Slot kz1  = Slot.new(o1,  n1,  t1,  fo1,  fc1,  bo1,  bc1,  bs1,  lo1,  lc1,  ls1,  lw1)
+var Slot kz2  = Slot.new(o2,  n2,  t2,  fo2,  fc2,  bo2,  bc2,  bs2,  lo2,  lc2,  ls2,  lw2)
+var Slot kz3  = Slot.new(o3,  n3,  t3,  fo3,  fc3,  bo3,  bc3,  bs3,  lo3,  lc3,  ls3,  lw3)
+var Slot kz4  = Slot.new(o4,  n4,  t4,  fo4,  fc4,  bo4,  bc4,  bs4,  lo4,  lc4,  ls4,  lw4)
+
+bool allowed = ALL_ON and tfAllowed
+
+kz1.update(allowed)
+kz2.update(allowed)
+kz3.update(allowed)
+kz4.update(allowed)
+
+// ───────────────────────── Ayırıcı motoru ─────────────────────────
+type Sep
+    bool        on
+    string      txt
+    color       col
+    string      style
+    int         width
+    int         maxSec
+    string      mode  = ""
+    int         hh    = 0
+    int         mm    = 0
+    array<bool> days  = na
+    line        futLn = na
+    label       futLb = na
+
+int    DAY_MS = 86400000
+string EX_TZ  = syminfo.timezone
+
+var array<string> DAY_NAMES   = array.from("Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi")
+var array<string> MONTH_NAMES = array.from("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
+
+fmtDate(int t) => str.format_time(t, "dd.MM.yyyy", TZ)
+
+noonOf(int t) => timestamp(TZ, year(t, TZ), month(t, TZ), dayofmonth(t, TZ), 12, 0)
+
+withCustom(string auto, string custom) => custom == "" ? auto : auto + " - " + custom
+
+// İşlem günleri (td) time_tradingday gibi UTC 00:00 damgasıyla tutulur
+fmtTd(int td) => str.format_time(td, "dd.MM.yyyy", "UTC")
+
+dayText(int td) => DAY_NAMES.get(dayofweek(td, "UTC") - 1) + " - " + fmtTd(td)
+
+mondayOf(int td) => td - ((dayofweek(td, "UTC") + 5) % 7) * DAY_MS
+
+weekText(int td) => fmtTd(mondayOf(td)) + " - " + fmtTd(mondayOf(td) + 6 * DAY_MS)
+
+hourText(int t) => str.format_time(t, "HH:mm", TZ)
+
+skipWeekend(int td) =>
+    int d = dayofweek(td, "UTC")
+    syminfo.type == "crypto" ? td : d == dayofweek.saturday ? td + 2 * DAY_MS : d == dayofweek.sunday ? td + DAY_MS : td
+
+firstTdOf(int y, int m) => skipWeekend(timestamp("UTC", y, m, 1, 0, 0))
+
+// Mum sınırları doğrudan sembolün kendi saatlik/günlük/haftalık mumlarından gelir
+bool newHour    = bar_index > 0 and timeframe.change("60")
+bool newDay     = bar_index > 0 and timeframe.change("D")
+bool newWeek    = bar_index > 0 and timeframe.change("W")
+bool newMonth   = bar_index > 0 and timeframe.change("M")
+bool newQuarter = bar_index > 0 and timeframe.change("3M")
+bool newYear    = bar_index > 0 and timeframe.change("12M")
+
+// Günlük mumun açılış saati (borsa saatiyle) ve işlem gününden önceki takvim gününde açılıp açılmadığı
+int  dOpen    = time("D")
+int  openH    = hour(dOpen, EX_TZ)
+int  openM    = minute(dOpen, EX_TZ)
+bool openPrev = dayofmonth(dOpen, EX_TZ) != dayofmonth(time_tradingday, "UTC")
+
+// Bir işlem gününün günlük mumunun açıldığı an
+tdStart(int td) =>
+    int d = openPrev ? td - DAY_MS : td
+    timestamp(EX_TZ, year(d, "UTC"), month(d, "UTC"), dayofmonth(d, "UTC"), openH, openM)
+
+int   calNoon = noonOf(time)
+int   barEnd  = time + timeframe.in_seconds() * 1000
+float tfMin   = timeframe.in_seconds() / 60
+
+method visible(Sep s) => s.on and timeframe.in_seconds() <= s.maxSec
+
+method draw(Sep s, string txt) =>
+    line.new(bar_index, low, bar_index, high, extend = extend.both, color = s.col, style = lineStyle(s.style), width = s.width)
+    if txt != ""
+        label.new(bar_index, high, txt, yloc = yloc.abovebar, style = label.style_label_lower_left, color = color.new(color.black, 100), textcolor = color.new(s.col, CLEAN ? 40 : 0), size = labelSize(SEP_LBL))
+
+// Gelecekteki ayırıcı: son barda silinip yeniden çizilir, yazısı son fiyat hizasında
+method drawFuture(Sep s, bool show, int t, string txt) =>
+    line.delete(s.futLn)
+    label.delete(s.futLb)
+    s.futLb := na
+    if show
+        s.futLn := line.new(t, low, t, high, xloc = xloc.bar_time, extend = extend.both, color = s.col, style = lineStyle(s.style), width = s.width)
+        s.futLb := label.new(t, close, txt, xloc = xloc.bar_time, style = label.style_label_left, color = color.new(color.black, 100), textcolor = color.new(s.col, 0), size = labelSize(SEP_LBL))
+
+method isTimeMode(Sep s) => s.mode == "Saat + günler" or s.mode == "Saat"
+
+method fires(Sep s) =>
+    int target = s.hh * 60 + s.mm
+    switch s.mode
+        "Aylık"    => newMonth
+        "Üç aylık" => newQuarter
+        "Yıllık"   => newYear
+        => s.days.get(dow - 1) and tod <= target and tod + tfMin > target
+
+// Saat türlerinde t = takvim günü (NY öğlen), dönem türlerinde t = işlem günü (UTC)
+method eventText(Sep s, int t) =>
+    switch s.mode
+        "Aylık"    => MONTH_NAMES.get(month(t, "UTC") - 1) + " " + str.tostring(year(t, "UTC"))
+        "Üç aylık" => "Q" + str.tostring(int((month(t, "UTC") - 1) / 3) + 1) + " " + str.tostring(year(t, "UTC"))
+        "Yıllık"   => str.tostring(year(t, "UTC"))
+        "Saat"     => str.format("{0,number,00}:{1,number,00}", s.hh, s.mm)
+        => DAY_NAMES.get(dayofweek(t, TZ) - 1) + " " + str.format("{0,number,00}:{1,number,00}", s.hh, s.mm) + " - " + fmtDate(t)
+
+// Sıradaki olayın [başlangıç zamanı, yazı için gün damgası]
+nextEvent(Sep s) =>
+    int t   = na
+    int day = na
+    if s.isTimeMode()
+        for k = 0 to 7
+            int n = calNoon + k * DAY_MS
+            int c = timestamp(TZ, year(n, TZ), month(n, TZ), dayofmonth(n, TZ), s.hh, s.mm)
+            if s.days.get(dayofweek(n, TZ) - 1) and c >= barEnd
+                t   := c
+                day := n
+                break
+    else
+        int y = year(time_tradingday, "UTC")
+        int m = month(time_tradingday, "UTC")
+        m := s.mode == "Aylık" ? m + 1 : s.mode == "Üç aylık" ? int((m - 1) / 3) * 3 + 4 : 13
+        if m > 12
+            y += 1
+            m -= 12
+        day := firstTdOf(y, m)
+        t   := tdStart(day)
+    [t, day]
+
+var Sep sepH  = Sep.new(hOn, hTxt, hCol, hSty, hW, timeframe.in_seconds(hTf))
+var Sep sepM  = Sep.new(mOn, mTxt, mCol, mSty, mW, timeframe.in_seconds(mTf), "Saat", 9, 30, array.from(false, true, true, true, true, true, false))
+var Sep sepD  = Sep.new(dOn, dTxt, dCol, dSty, dW, timeframe.in_seconds(dTf))
+var Sep sepW  = Sep.new(wOn, wTxt, wCol, wSty, wW, timeframe.in_seconds(wTf))
+var Sep sepX1 = Sep.new(x1On, x1Txt, x1Col, x1Sty, x1W, timeframe.in_seconds(x1Tf), x1Md, x1H, x1M, array.from(x1d1, x1d2, x1d3, x1d4, x1d5, x1d6, x1d7))
+var Sep sepX2 = Sep.new(x2On, x2Txt, x2Col, x2Sty, x2W, timeframe.in_seconds(x2Tf), x2Md, x2H, x2M, array.from(x2d1, x2d2, x2d3, x2d4, x2d5, x2d6, x2d7))
+var Sep sepX3 = Sep.new(x3On, x3Txt, x3Col, x3Sty, x3W, timeframe.in_seconds(x3Tf), x3Md, x3H, x3M, array.from(x3d1, x3d2, x3d3, x3d4, x3d5, x3d6, x3d7))
+
+method run(Sep s) =>
+    if s.visible() and s.fires()
+        s.draw(s.mode == "Saat" ? s.txt : withCustom(s.eventText(s.isTimeMode() ? calNoon : time_tradingday), s.txt))
+    if barstate.islast
+        [t, day] = nextEvent(s)
+        string futTxt = na(day) ? "" : withCustom(s.eventText(day), s.txt)
+        s.drawFuture(SEP_FUT and s.visible() and not na(t), t, futTxt)
+
+// Saat başı tam saate düşmeyen sembollerde (hisse: 09:30, 10:30) yazı eskisi gibi mumun üstünde kalır
+bool hTop = minute(time("60"), TZ) != 0
+
+// Çakışmada öncelik: haftalık > günlük > saatlik
+bool wVis = sepW.visible()
+bool dVis = sepD.visible()
+if wVis and newWeek
+    sepW.draw(withCustom(weekText(time_tradingday), sepW.txt))
+else if dVis and newDay
+    sepD.draw(withCustom(dayText(time_tradingday), sepD.txt))
+else if sepH.visible() and newHour
+    sepH.draw(hTop ? withCustom(hourText(time("60")), sepH.txt) : sepH.txt)
+
+// Sıradaki mumlar: hafta kapanışını geçen günlük mum bir sonraki haftanın ilk işlem gününe kayar
+if barstate.islast
+    int nextWeekTd = mondayOf(time_tradingday) + 7 * DAY_MS
+    int nextWeekT  = tdStart(nextWeekTd)
+    int nextDayTd  = skipWeekend(time_tradingday + DAY_MS)
+    int nextDayT   = tdStart(nextDayTd)
+    int weekClose  = time_close("W")
+    if not na(weekClose) and nextDayT >= weekClose
+        nextDayTd := nextWeekTd
+        nextDayT  := nextWeekT
+    int hourClose = time_close("60")
+    int nextHourT = na(hourClose) ? time("60") + 3600000 : hourClose
+    sepW.drawFuture(SEP_FUT and wVis, nextWeekT, withCustom(weekText(nextWeekTd), sepW.txt))
+    sepD.drawFuture(SEP_FUT and dVis and not (wVis and nextDayT == nextWeekT), nextDayT, withCustom(dayText(nextDayTd), sepD.txt))
+    sepH.drawFuture(SEP_FUT and sepH.visible() and not (wVis and nextHourT == nextWeekT) and not (dVis and nextHourT == nextDayT), nextHourT, withCustom(hourText(nextHourT), sepH.txt))
+
+sepX1.run()
+sepX2.run()
+sepX3.run()
+sepM.run()
+
+// Saat yazıları grafiğin en altına sabitlenir; kaydırınca da görünür. Pine burada yazının sabit olmasını ister, o yüzden her saat ayrı çizilir
+int   hBot  = sepH.visible() and newHour and not hTop ? hour(time("60"), TZ) : -1
+color hBotC = color.new(hCol, 0)
+plotshape(hBot == 0, "00:00", shape.circle, location.bottom, color.new(color.black, 100), text = "00:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 1, "01:00", shape.circle, location.bottom, color.new(color.black, 100), text = "01:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 2, "02:00", shape.circle, location.bottom, color.new(color.black, 100), text = "02:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 3, "03:00", shape.circle, location.bottom, color.new(color.black, 100), text = "03:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 4, "04:00", shape.circle, location.bottom, color.new(color.black, 100), text = "04:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 5, "05:00", shape.circle, location.bottom, color.new(color.black, 100), text = "05:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 6, "06:00", shape.circle, location.bottom, color.new(color.black, 100), text = "06:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 7, "07:00", shape.circle, location.bottom, color.new(color.black, 100), text = "07:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 8, "08:00", shape.circle, location.bottom, color.new(color.black, 100), text = "08:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 9, "09:00", shape.circle, location.bottom, color.new(color.black, 100), text = "09:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 10, "10:00", shape.circle, location.bottom, color.new(color.black, 100), text = "10:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 11, "11:00", shape.circle, location.bottom, color.new(color.black, 100), text = "11:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 12, "12:00", shape.circle, location.bottom, color.new(color.black, 100), text = "12:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 13, "13:00", shape.circle, location.bottom, color.new(color.black, 100), text = "13:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 14, "14:00", shape.circle, location.bottom, color.new(color.black, 100), text = "14:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 15, "15:00", shape.circle, location.bottom, color.new(color.black, 100), text = "15:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 16, "16:00", shape.circle, location.bottom, color.new(color.black, 100), text = "16:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 17, "17:00", shape.circle, location.bottom, color.new(color.black, 100), text = "17:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 18, "18:00", shape.circle, location.bottom, color.new(color.black, 100), text = "18:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 19, "19:00", shape.circle, location.bottom, color.new(color.black, 100), text = "19:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 20, "20:00", shape.circle, location.bottom, color.new(color.black, 100), text = "20:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 21, "21:00", shape.circle, location.bottom, color.new(color.black, 100), text = "21:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 22, "22:00", shape.circle, location.bottom, color.new(color.black, 100), text = "22:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(hBot == 23, "23:00", shape.circle, location.bottom, color.new(color.black, 100), text = "23:00", textcolor = hBotC, size = size.small, display = display.pane, editable = false)
+plotshape(sepM.visible() and sepM.fires(), "09:30", shape.circle, location.bottom, color.new(color.black, 100), text = "09:30", textcolor = color.new(mCol, 0), size = size.small, display = display.pane, editable = false)
+
+// Gelecek ayırıcı yazıları zamana göre sıralanıp mini grafiklerin üzerinde yukarı doğru dizilir, birbirine ve mumlara girmez
+float futRng  = ta.highest(high, 100) - ta.lowest(low, 100)
+float futTop  = ta.highest(high, 100) + futRng * (HTF_H - 100) / 200
+float futStep = futRng * 0.03
+if barstate.islast
+    array<label> futs = array.new<label>()
+    array<int>   futX = array.new<int>()
+    for sp in array.from(sepW, sepD, sepH, sepM, sepX1, sepX2, sepX3)
+        if not na(sp.futLb)
+            futs.push(sp.futLb)
+            futX.push(sp.futLb.get_x())
+    for [row, idx] in futX.sort_indices()
+        futs.get(idx).set_y(futTop + (row + 2) * futStep)
+
+// ───────────────────────── Önceki gün / hafta / ay seviyeleri ─────────────────────────
+type PrevLvl
+    string       name
+    bool         on
+    color        col
+    string       style
+    int          width
+    int          keep
+    int          maxSec
+    array<Level> hist
+    bool         seen  = false
+    float        hi    = na
+    float        lo    = na
+    int          hiBar = na
+    int          loBar = na
+
+method addLevel(PrevLvl p, float price, int x, bool isHigh) =>
+    line  ln = line.new(x, price, bar_index, price, color = p.col, style = lineStyle(p.style), width = p.width)
+    label lb = label.new(bar_index, price, p.name + (isHigh ? "H" : "L"), style = label.style_label_lower_right, color = color.new(color.black, 100), textcolor = p.col, size = labelSize(LBL_SIZE))
+    Level lv = Level.new(ln, lb, price, isHigh, bar_index, na, 0, p.col)
+    p.hist.push(lv)
+    pending.push(lv)
+
+// Dönem değişince biten dönemin high/low'u, oluştuğu bardan başlayan seviyeye dönüşür
+method track(PrevLvl p, bool isNew) =>
+    if isNew
+        if p.seen and p.on and timeframe.in_seconds() <= p.maxSec
+            p.addLevel(p.hi, p.hiBar, true)
+            p.addLevel(p.lo, p.loBar, false)
+            while p.hist.size() > p.keep * 2
+                p.hist.shift().kill()
+        p.seen  := true
+        p.hi    := high
+        p.lo    := low
+        p.hiBar := bar_index
+        p.loBar := bar_index
+    else
+        if na(p.hi) or high > p.hi
+            p.hi    := high
+            p.hiBar := bar_index
+        if na(p.lo) or low < p.lo
+            p.lo    := low
+            p.loBar := bar_index
+
+var PrevLvl prevD = PrevLvl.new("PD", pdOn, pdCol, pdSty, pdW, pdN, timeframe.in_seconds(pdTf), array.new<Level>())
+var PrevLvl prevW = PrevLvl.new("PW", pwOn, pwCol, pwSty, pwW, pwN, timeframe.in_seconds(pwTf), array.new<Level>())
+var PrevLvl prevM = PrevLvl.new("PM", pmOn, pmCol, pmSty, pmW, pmN, timeframe.in_seconds(pmTf), array.new<Level>())
+
+prevD.track(newDay)
+prevW.track(newWeek)
+prevM.track(newMonth)
+
+// ───────────────────────── Açılış boşlukları ─────────────────────────
+type GapItem
+    box   bx
+    line  ce
+    float top
+    float bot
+    bool  up
+    bool  live  = true
+    int   ceBar = na
+    label lb    = na
+
+type Gap
+    string         name
+    bool           on
+    color          fill
+    color          lineCol
+    int            keep
+    int            maxSec
+    array<GapItem> items
+
+// Önceki mumun kapanışı ile yeni mumun açılışı arasındaki boşluk, dolana kadar sağa uzanan kutu olur
+method add(Gap g, float pc) =>
+    float top = math.max(pc, open)
+    float bot = math.min(pc, open)
+    if g.on and timeframe.in_seconds() <= g.maxSec and top > bot
+        box  bx = box.new(bar_index, top, bar_index, bot, border_color = g.lineCol, bgcolor = g.fill)
+        line ce = GAP_CE ? line.new(bar_index, (top + bot) / 2, bar_index, (top + bot) / 2, color = g.lineCol, style = line.style_dashed) : na
+        g.items.push(GapItem.new(bx, ce, top, bot, open > pc))
+        if g.items.size() > g.keep
+            GapItem old = g.items.shift()
+            box.delete(old.bx)
+            line.delete(old.ce)
+            label.delete(old.lb)
+
+// Yukarı boşluk fiyat alt kenara inince, aşağı boşluk üst kenara çıkınca dolmuş sayılır ve o barda durur
+// Fiyat orta çizgiye değince (yarı dolum) CE çizgisi soluklaşır
+// Yazı: uzayan boşlukta son mumun sağında; dolunca orta çizgiye değen ilk mumdan önce biter, o hizada mum yoktur
+method grow(Gap g) =>
+    for it in g.items
+        if it.live
+            it.bx.set_right(bar_index)
+            line.set_x2(it.ce, bar_index)
+            float mid = (it.top + it.bot) / 2
+            if na(it.ceBar) and (it.up ? low <= mid : high >= mid)
+                it.ceBar := bar_index - 2
+                line.set_color(it.ce, color.new(g.lineCol, 75))
+            if it.up ? low <= it.bot : high >= it.top
+                it.live := false
+                label.delete(it.lb)
+                it.lb := label.new(it.ceBar, mid, g.name, style = label.style_label_right, color = color.new(color.black, 100), textcolor = g.lineCol, size = size.normal)
+            else if barstate.islast
+                label.delete(it.lb)
+                it.lb := label.new(bar_index + 2, mid, g.name, style = label.style_label_left, color = color.new(color.black, 100), textcolor = g.lineCol, size = size.normal)
+
+var Gap nwog = Gap.new("NWOG", nwOn, nwFill, nwLine, nwN, timeframe.in_seconds(nwTf), array.new<GapItem>())
+var Gap ndog = Gap.new("NDOG", ndOn, ndFill, ndLine, ndN, timeframe.in_seconds(ndTf), array.new<GapItem>())
+
+float prevClose = close[1]
+// Hafta başında günlük boşluk haftalıkla aynıdır, sadece NWOG çizilir
+if newWeek
+    nwog.add(prevClose)
+else if newDay
+    ndog.add(prevClose)
+nwog.grow()
+ndog.grow()
+
+// ───────────────────────── FVG motoru ─────────────────────────
+type FvgItem
+    box   bx
+    line  ce
+    float top
+    float bot
+    bool  up
+    int   tStart
+    int   endT
+    int   ceT = na
+    label lb  = na
+    int   conf = na
+
+type FvgTf
+    string         name
+    color          col
+    int            ext
+    array<FvgItem> live
+    int            lastT = na
+    int            fill  = 85
+    string         fmt   = "dd.MM HH:mm"
+
+extMs(string s) =>
+    switch s
+        "1 gün"   => DAY_MS
+        "2 gün"   => 2 * DAY_MS
+        "3 gün"   => 3 * DAY_MS
+        "5 gün"   => 5 * DAY_MS
+        "1 hafta" => 7 * DAY_MS
+        "2 hafta" => 14 * DAY_MS
+        "1 ay"    => 30 * DAY_MS
+        "2 ay"    => 61 * DAY_MS
+        "3 ay"    => 91 * DAY_MS
+        "6 ay"    => 182 * DAY_MS
+        "1 yıl"   => 365 * DAY_MS
+        "4 yıl"   => 1461 * DAY_MS
+        => int(na)
+
+// HTF bağlamında çalışır: lookahead ile birlikte [1] son kapanmış mumu verir, FVG sonradan kaybolmaz
+fvgPack() =>
+    bool  up  = low[1] > high[3]
+    bool  dn  = high[1] < low[3]
+    float top = up ? low[1] : low[3]
+    float bot = up ? high[3] : high[1]
+    [up, dn, top, bot, time[3], time[1], time_close[1]]
+
+int fvgGapT = time[2]
+
+// Grafikten uzaklaştıkça dolgu açılır ama hiçbir zaman tamamen şeffaf olmaz
+fvgFill(string tf) =>
+    float ratio = timeframe.in_seconds(tf) / timeframe.in_seconds()
+    not CLEAN or ratio <= 24 ? 85 : ratio <= 96 ? 89 : 92
+
+// Fiyata en yakın olmayan ve dolmuş FVG'lerin dolgusu
+fvgDim(int t) => CLEAN ? math.min(t + 6, 96) : t
+
+// Fiyatın üstündeki ve altındaki en yakın FVG'nin sırası
+fvgNearest(array<FvgItem> items) =>
+    int   aI = -1
+    int   bI = -1
+    float aD = na
+    float bD = na
+    for [i, it] in items
+        bool  above = it.bot > close
+        float d     = above ? it.bot - close : math.max(close - it.top, 0.0)
+        if above and (aI < 0 or d < aD)
+            aI := i
+            aD := d
+        else if not above and (bI < 0 or d < bD)
+            bI := i
+            bD := d
+    [aI, bI]
+
+fvgFmt(string tf) => timeframe.in_seconds(tf) >= 86400 ? "dd.MM.yyyy" : "dd.MM HH:mm"
+
+method fvgText(FvgTf f, FvgItem it) => FVG_TM and not na(it.conf) ? f.name + " · " + str.format_time(it.conf, f.fmt, TZ) : f.name
+
+method drawBody(FvgTf f, FvgItem it, int tRight, bool near = true) =>
+    float mid = (it.top + it.bot) / 2
+    bool  dim = CLEAN and not near
+    it.bx := box.new(it.tStart, it.top, tRight, it.bot, xloc = xloc.bar_time, border_color = color.new(f.col, dim ? 85 : 70), bgcolor = color.new(f.col, near ? f.fill : fvgDim(f.fill)))
+    it.ce := FVG_CE ? line.new(it.tStart, mid, tRight, mid, xloc = xloc.bar_time, color = color.new(f.col, dim ? 88 : na(it.ceT) ? 0 : 75), style = line.style_dashed) : na
+
+// Üç mumun kapanışında FVG eklenir; o zaman diliminde üç mumun ilkinin açılışından başlar, tamamen dolunca veya süresi bitince durur.
+// Yazı: uzayan FVG'de son mumun sağında; duran FVG'de orta çizgiye değen ilk mumdan önce biter, o hizada mum yoktur.
+// Uzayanlar son barda yeniden çizilir: böylece eski HTF FVG'leri 500 çizim sınırında silinmez.
+method scan(FvgTf f, bool ok, bool up, bool dn, float top, float bot, int tFirst, int tLast, int tConf) =>
+    if ok and not na(tLast) and (na(f.lastT) or tLast != f.lastT)
+        f.lastT := tLast
+        if up or dn
+            FvgItem nw = FvgItem.new(na, na, top, bot, up, tFirst, na(f.ext) ? na : time + f.ext, conf = tConf)
+            f.drawBody(nw, time)
+            f.live.push(nw)
+    if f.live.size() > 0
+        int aI = -1
+        int bI = -1
+        if barstate.islast
+            [nA, nB] = fvgNearest(f.live)
+            aI := nA
+            bI := nB
+        for i = f.live.size() - 1 to 0
+            FvgItem it = f.live.get(i)
+            float mid = (it.top + it.bot) / 2
+            it.bx.set_right(time)
+            line.set_x2(it.ce, time)
+            if na(it.ceT) and (it.up ? low <= mid : high >= mid)
+                it.ceT := fvgGapT
+                line.set_color(it.ce, color.new(f.col, 75))
+            if (it.up ? low <= it.bot : high >= it.top) or (not na(it.endT) and time >= it.endT)
+                label.delete(it.lb)
+                f.live.remove(i)
+                if CLEAN
+                    it.bx.set_bgcolor(color.new(f.col, fvgDim(f.fill)))
+                    it.bx.set_border_color(color.new(f.col, 85))
+                    line.set_color(it.ce, color.new(f.col, 88))
+                it.lb := label.new(na(it.ceT) ? time : it.ceT, mid, f.fvgText(it), xloc = xloc.bar_time, style = label.style_label_right, color = color.new(color.black, 100), textcolor = CLEAN ? color.new(f.col, 45) : f.col, size = size.normal)
+            else if barstate.islast
+                box.delete(it.bx)
+                line.delete(it.ce)
+                label.delete(it.lb)
+                f.drawBody(it, time, i == aI or i == bI)
+                it.lb := label.new(time + 2 * timeframe.in_seconds() * 1000, mid, f.fvgText(it), xloc = xloc.bar_time, style = label.style_label_left, color = color.new(color.black, 100), textcolor = f.col, size = size.normal)
+
+bool fv1Ok  = FVG_ON and fv1On and timeframe.in_seconds("1") >= timeframe.in_seconds()
+bool fv2Ok  = FVG_ON and fv2On and timeframe.in_seconds("5") >= timeframe.in_seconds()
+bool fv3Ok  = FVG_ON and fv3On and timeframe.in_seconds("15") >= timeframe.in_seconds()
+bool fv4Ok  = FVG_ON and fv4On and timeframe.in_seconds("30") >= timeframe.in_seconds()
+bool fv5Ok  = FVG_ON and fv5On and timeframe.in_seconds("60") >= timeframe.in_seconds()
+bool fv6Ok  = FVG_ON and fv6On and timeframe.in_seconds("240") >= timeframe.in_seconds()
+bool fv7Ok  = FVG_ON and fv7On and timeframe.in_seconds("480") >= timeframe.in_seconds()
+bool fv8Ok  = FVG_ON and fv8On and timeframe.in_seconds("D") >= timeframe.in_seconds()
+bool fv9Ok  = FVG_ON and fv9On and timeframe.in_seconds("W") >= timeframe.in_seconds()
+bool fv10Ok = FVG_ON and fv10On and timeframe.in_seconds("M") >= timeframe.in_seconds()
+
+[fv1U, fv1D, fv1T, fv1B, fv1S, fv1L, fv1C]       = request.security(syminfo.tickerid, fv1Ok ? "1" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv2U, fv2D, fv2T, fv2B, fv2S, fv2L, fv2C]       = request.security(syminfo.tickerid, fv2Ok ? "5" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv3U, fv3D, fv3T, fv3B, fv3S, fv3L, fv3C]       = request.security(syminfo.tickerid, fv3Ok ? "15" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv4U, fv4D, fv4T, fv4B, fv4S, fv4L, fv4C]       = request.security(syminfo.tickerid, fv4Ok ? "30" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv5U, fv5D, fv5T, fv5B, fv5S, fv5L, fv5C]       = request.security(syminfo.tickerid, fv5Ok ? "60" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv6U, fv6D, fv6T, fv6B, fv6S, fv6L, fv6C]       = request.security(syminfo.tickerid, fv6Ok ? "240" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv7U, fv7D, fv7T, fv7B, fv7S, fv7L, fv7C]       = request.security(syminfo.tickerid, fv7Ok ? "480" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv8U, fv8D, fv8T, fv8B, fv8S, fv8L, fv8C]       = request.security(syminfo.tickerid, fv8Ok ? "D" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv9U, fv9D, fv9T, fv9B, fv9S, fv9L, fv9C]       = request.security(syminfo.tickerid, fv9Ok ? "W" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+[fv10U, fv10D, fv10T, fv10B, fv10S, fv10L, fv10C] = request.security(syminfo.tickerid, fv10Ok ? "M" : timeframe.period, fvgPack(), lookahead = barmerge.lookahead_on)
+
+var FvgTf fv1  = FvgTf.new("1m FVG", fv1Col, extMs(fv1Ext), array.new<FvgItem>(), fill = fvgFill("1"), fmt = fvgFmt("1"))
+var FvgTf fv2  = FvgTf.new("5m FVG", fv2Col, extMs(fv2Ext), array.new<FvgItem>(), fill = fvgFill("5"), fmt = fvgFmt("5"))
+var FvgTf fv3  = FvgTf.new("15m FVG", fv3Col, extMs(fv3Ext), array.new<FvgItem>(), fill = fvgFill("15"), fmt = fvgFmt("15"))
+var FvgTf fv4  = FvgTf.new("30m FVG", fv4Col, extMs(fv4Ext), array.new<FvgItem>(), fill = fvgFill("30"), fmt = fvgFmt("30"))
+var FvgTf fv5  = FvgTf.new("1h FVG", fv5Col, extMs(fv5Ext), array.new<FvgItem>(), fill = fvgFill("60"), fmt = fvgFmt("60"))
+var FvgTf fv6  = FvgTf.new("4h FVG", fv6Col, extMs(fv6Ext), array.new<FvgItem>(), fill = fvgFill("240"), fmt = fvgFmt("240"))
+var FvgTf fv7  = FvgTf.new("8h FVG", fv7Col, extMs(fv7Ext), array.new<FvgItem>(), fill = fvgFill("480"), fmt = fvgFmt("480"))
+var FvgTf fv8  = FvgTf.new("1D FVG", fv8Col, extMs(fv8Ext), array.new<FvgItem>(), fill = fvgFill("D"), fmt = fvgFmt("D"))
+var FvgTf fv9  = FvgTf.new("1W FVG", fv9Col, extMs(fv9Ext), array.new<FvgItem>(), fill = fvgFill("W"), fmt = fvgFmt("W"))
+var FvgTf fv10 = FvgTf.new("1M FVG", fv10Col, extMs(fv10Ext), array.new<FvgItem>(), fill = fvgFill("M"), fmt = fvgFmt("M"))
+
+fv1.scan(fv1Ok, fv1U, fv1D, fv1T, fv1B, fv1S, fv1L, fv1C)
+fv2.scan(fv2Ok, fv2U, fv2D, fv2T, fv2B, fv2S, fv2L, fv2C)
+fv3.scan(fv3Ok, fv3U, fv3D, fv3T, fv3B, fv3S, fv3L, fv3C)
+fv4.scan(fv4Ok, fv4U, fv4D, fv4T, fv4B, fv4S, fv4L, fv4C)
+fv5.scan(fv5Ok, fv5U, fv5D, fv5T, fv5B, fv5S, fv5L, fv5C)
+fv6.scan(fv6Ok, fv6U, fv6D, fv6T, fv6B, fv6S, fv6L, fv6C)
+fv7.scan(fv7Ok, fv7U, fv7D, fv7T, fv7B, fv7S, fv7L, fv7C)
+fv8.scan(fv8Ok, fv8U, fv8D, fv8T, fv8B, fv8S, fv8L, fv8C)
+fv9.scan(fv9Ok, fv9U, fv9D, fv9T, fv9B, fv9S, fv9L, fv9C)
+fv10.scan(fv10Ok, fv10U, fv10D, fv10T, fv10B, fv10S, fv10L, fv10C)
+
+// ───────────────────────── Midnight Open motoru ─────────────────────────
+var array<line>  moLines  = array.new<line>()
+var array<label> moLabels = array.new<label>()
+var bool         moLive   = false
+bool             moNew    = tod == 0 and tod[1] != 0
+
+// Fiyat çizgiyi gün içinde defalarca geçebilir; bu yüzden temasta durmaz, 17:00 NY'de biter
+if moOn and timeframe.in_seconds() <= timeframe.in_seconds(moTf)
+    if moNew
+        moLines.push(line.new(bar_index, open, bar_index, open, color = moCol, style = lineStyle(moSty), width = moW))
+        moLabels.push(label.new(bar_index, open, "MO", style = label.style_label_lower_right, color = color.new(color.black, 100), textcolor = moCol, size = labelSize(LBL_SIZE)))
+        moLive := true
+        if moLines.size() > moN
+            line.delete(moLines.shift())
+            label.delete(moLabels.shift())
+    else if moLive
+        if tod < 17 * 60
+            moLines.last().set_x2(bar_index)
+            moLabels.last().set_x(bar_index)
+        else
+            moLive := false
+
+// ───────────────────────── Seviye uzatma ─────────────────────────
+// Fitil değerse o barda durur ve alındı olarak işaretlenir.
+// Killzone seviyeleri ayrıca EXT_DAYS işlem günü sonra seansın bittiği saatte durur; önceki gün/hafta/ay seviyelerinin süresi yoktur.
+if pending.size() > 0
+    for i = pending.size() - 1 to 0
+        Level lv = pending.get(i)
+        if lv.dead
+            pending.remove(i)
+            continue
+        if newTradingDay and bar_index > lv.startBar
+            lv.days := lv.days + 1
+        bool touched = lv.isHigh ? high >= lv.price : low <= lv.price
+        bool expired = not na(lv.endTod) and (lv.days > EXT_DAYS or (lv.days == EXT_DAYS and tod >= lv.endTod))
+        if not expired
+            lv.ln.set_x2(bar_index)
+            lv.lb.set_x(bar_index)
+            if touched
+                lv.markTaken()
+        if touched or expired
+            pending.remove(i)
+
+// ───────────────────────── Watermark ─────────────────────────
+string G_WMT   = "Watermark (üst)"
+bool   wmtOn   = input.bool(false, "Göster", group = G_WMT)
+string wmtPos  = input.string("Orta", "Konum", options = ["Sol", "Orta", "Sağ"], group = G_WMT)
+string wmtSize = input.string("Normal", "Boyut", options = ["Çok küçük", "Küçük", "Normal", "Büyük", "Çok büyük"], group = G_WMT)
+color  wmtCol  = input.color(color.new(#2E0602, 70), "Renk", group = G_WMT)
+string wmtFont = input.string("Normal", "Yazı tipi", options = ["Normal", "Monospace"], group = G_WMT)
+bool   wmtSym  = input.bool(true, "Sembol", inline = "wmtc", group = G_WMT)
+bool   wmtExch = input.bool(true, "Borsa", inline = "wmtc", group = G_WMT)
+bool   wmtTf   = input.bool(true, "Zaman dilimi", inline = "wmtc", group = G_WMT)
+string wmtTxt  = input.string("", "Ek metin", group = G_WMT)
+
+string G_WMB   = "Watermark (alt)"
+bool   wmbOn   = input.bool(true, "Göster", group = G_WMB)
+string wmbPos  = input.string("Orta", "Konum", options = ["Sol", "Orta", "Sağ"], group = G_WMB)
+string wmbSize = input.string("Normal", "Boyut", options = ["Çok küçük", "Küçük", "Normal", "Büyük", "Çok büyük"], group = G_WMB)
+color  wmbCol  = input.color(color.new(#2E0602, 70), "Renk", group = G_WMB)
+string wmbFont = input.string("Normal", "Yazı tipi", options = ["Normal", "Monospace"], group = G_WMB)
+bool   wmbSym  = input.bool(true, "Sembol", inline = "wmbc", group = G_WMB)
+bool   wmbExch = input.bool(true, "Borsa", inline = "wmbc", group = G_WMB)
+bool   wmbTf   = input.bool(true, "Zaman dilimi", inline = "wmbc", group = G_WMB)
+string wmbTxt  = input.string("", "Ek metin", group = G_WMB)
+bool   wmbDate = input.bool(true, "Grafiğin tarihi (alt satır)", tooltip = "Son mumun NY tarihini yazar. Tekrar oynatta geri sardığın günü gösterir, bugünü değil.", group = G_WMB)
+
+// 1m, 5m, 1h, 4h, 1D, 1W, 1M
+tfText() =>
+    int m = timeframe.multiplier
+    if timeframe.isseconds
+        str.tostring(m) + "s"
+    else if timeframe.isminutes
+        m % 60 == 0 ? str.tostring(int(m / 60)) + "h" : str.tostring(m) + "m"
+    else if timeframe.isdaily
+        str.tostring(m) + "D"
+    else if timeframe.isweekly
+        str.tostring(m) + "W"
+    else if timeframe.ismonthly
+        str.tostring(m) + "M"
+    else
+        timeframe.period
+
+wmText(bool sym, bool exch, bool tf, string extra) =>
+    string s = sym ? (exch ? syminfo.prefix + ":" + syminfo.ticker : syminfo.ticker) : ""
+    if tf
+        s := s == "" ? tfText() : s + " | " + tfText()
+    extra == "" ? s : s == "" ? extra : s + " - " + extra
+
+// Son mumun NY tarihi: 05 Ocak 2026 · Pazartesi
+wmDate(int t) =>
+    array<string> ay  = array.from("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
+    array<string> gun = array.from("Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi")
+    str.format_time(t, "dd", TZ) + " " + ay.get(month(t, TZ) - 1) + " " + str.tostring(year(t, TZ)) + " · " + gun.get(dayofweek(t, TZ) - 1)
+
+wmPosition(string p, bool top) =>
+    switch p
+        "Sol" => top ? position.top_left : position.bottom_left
+        "Sağ" => top ? position.top_right : position.bottom_right
+        => top ? position.top_center : position.bottom_center
+
+wmSize(string s) =>
+    switch s
+        "Çok küçük" => size.tiny
+        "Küçük"     => size.small
+        "Büyük"     => size.large
+        "Çok büyük" => size.huge
+        => size.normal
+
+wmFont(string f) => f == "Monospace" ? font.family_monospace : font.family_default
+
+var table wmTop    = table.new(wmPosition(wmtPos, true), 1, 1)
+var table wmBottom = table.new(wmPosition(wmbPos, false), 1, 1)
+
+if barstate.islast
+    if wmtOn
+        wmTop.cell(0, 0, wmText(wmtSym, wmtExch, wmtTf, wmtTxt), text_color = wmtCol, text_size = wmSize(wmtSize), text_font_family = wmFont(wmtFont))
+    if wmbOn
+        string wb = wmText(wmbSym, wmbExch, wmbTf, wmbTxt)
+        if wmbDate
+            wb := wb == "" ? wmDate(time) : wb + "\n" + wmDate(time)
+        wmBottom.cell(0, 0, wb, text_color = wmbCol, text_size = wmSize(wmbSize), text_font_family = wmFont(wmbFont))
+
+// ───────────────────────── HTF mumları motoru ─────────────────────────
+// Grafiğin zaman dilimine göre [üst, alt] grup: 1m → 15m/1h, 5m → 1h/1D, 15m → 4h/1D, 1h–4h → 1D/1W, üstü → 1M/3M
+autoHtf(bool upper) =>
+    int s = timeframe.in_seconds()
+    s <= 60 ? (upper ? "15" : "60") : s <= 300 ? (upper ? "60" : "D") : s <= 900 ? (upper ? "240" : "D") : s <= 14400 ? (upper ? "D" : "W") : (upper ? "M" : "3M")
+
+tfLabel(string tf) =>
+    int s = timeframe.in_seconds(tf)
+    s < 60 ? str.tostring(s) + "s" : s < 3600 ? str.tostring(int(s / 60)) + "m" : s < 86400 ? str.tostring(int(s / 3600)) + "h" : s < 604800 ? str.tostring(int(s / 86400)) + "D" : s < 2419200 ? str.tostring(int(s / 604800)) + "W" : str.tostring(math.round(s / 2629800)) + "M"
+
+fmtLeft(int ms) =>
+    int s   = math.max(0, int(ms / 1000))
+    int d   = int(s / 86400)
+    int h   = int((s % 86400) / 3600)
+    int m   = int((s % 3600) / 60)
+    int sec = s % 60
+    d > 0 ? str.format("{0}g {1,number,00}:{2,number,00}", d, h, m) : h > 0 ? str.format("{0,number,00}:{1,number,00}:{2,number,00}", h, m, sec) : str.format("{0,number,00}:{1,number,00}", m, sec)
+
+// Dizi döndüren istekler sadece son mumlarda dolar: her mumda dizi üretmek bellek sınırını aşar
+reqLive() => time >= last_bar_time - 5 * timeframe.in_seconds() * 1000
+
+// HTF bağlamında çalışır: son HTF_N mumun OHLC'si ve zamanı (0 = oluşan mum)
+htfPack() =>
+    bool live = reqLive()
+    array<float> o = live ? array.new<float>(HTF_N) : na
+    array<float> h = live ? array.new<float>(HTF_N) : na
+    array<float> l = live ? array.new<float>(HTF_N) : na
+    array<float> c = live ? array.new<float>(HTF_N) : na
+    array<int>   t = live ? array.new<int>(HTF_N) : na
+    array<int>   d = live ? array.new<int>(HTF_N) : na
+    if live
+        for i = 0 to HTF_N - 1
+            o.set(i, open[i])
+            h.set(i, high[i])
+            l.set(i, low[i])
+            c.set(i, close[i])
+            t.set(i, timeframe.isdaily ? time_tradingday[i] : time[i])
+            d.set(i, time_tradingday[i])
+    [o, h, l, c, t, d, time_close]
+
+string htf1   = HTF1_SEL == "Otomatik" ? autoHtf(true) : HTF1_TF
+string htf2   = HTF2_SEL == "Otomatik" ? autoHtf(false) : HTF2_TF
+bool   htf1Ok = HTF_ON and timeframe.in_seconds(htf1) > timeframe.in_seconds()
+bool   htf2Ok = HTF_ON and timeframe.in_seconds(htf2) > timeframe.in_seconds()
+
+[aO, aH, aL, aC, aT, aD, aTc] = request.security(syminfo.tickerid, htf1Ok ? htf1 : timeframe.period, htfPack())
+[bO, bH, bL, bC, bT, bD, bTc] = request.security(syminfo.tickerid, htf2Ok ? htf2 : timeframe.period, htfPack())
+
+// SMT karşı sembolü: vadelilerde kök, diğerlerinde sembol adıyla eşlenir; ":" içeren sonuç kendi borsasını taşır
+smtTarget(string k) =>
+    switch k
+        "EURUSD"    => "GBPUSD"
+        "GBPUSD"    => "EURUSD"
+        "AUDUSD"    => "NZDUSD"
+        "NZDUSD"    => "AUDUSD"
+        "USDJPY"    => "USDCHF"
+        "USDCHF"    => "USDJPY"
+        "USDCAD"    => "USDCHF"
+        "EURJPY"    => "GBPJPY"
+        "GBPJPY"    => "EURJPY"
+        "XAUUSD"    => "XAGUSD"
+        "XAGUSD"    => "XAUUSD"
+        "DXY"       => "OANDA:EURUSD"
+        "NAS100USD" => "SPX500USD"
+        "SPX500USD" => "NAS100USD"
+        "US30USD"   => "SPX500USD"
+        "NAS100"    => "SPX500"
+        "SPX500"    => "NAS100"
+        "US100"     => "US500"
+        "US500"     => "US100"
+        "US30"      => "US500"
+        "SPX"       => "NASDAQ:NDX"
+        "NDX"       => "SP:SPX"
+        "SPY"       => "NASDAQ:QQQ"
+        "QQQ"       => "AMEX:SPY"
+        "NQ"        => "ES"
+        "ES"        => "NQ"
+        "MNQ"       => "MES"
+        "MES"       => "MNQ"
+        "RTY"       => "ES"
+        "M2K"       => "MES"
+        "YM"        => "CME_MINI:ES"
+        "MYM"       => "CME_MINI:MES"
+        "GC"        => "SI"
+        "SI"        => "GC"
+        "6E"        => "6B"
+        "6B"        => "6E"
+        "BTC"       => "ETH"
+        "ETH"       => "BTC"
+        "MBT"       => "MET"
+        "MET"       => "MBT"
+        => ""
+
+bool   smtFut    = syminfo.type == "futures" and str.length(syminfo.root) > 0
+string smtTo     = smtTarget(smtFut ? syminfo.root : syminfo.ticker)
+bool   smtBtc    = not smtFut and str.contains(syminfo.ticker, "BTC")
+bool   smtEth    = not smtFut and str.contains(syminfo.ticker, "ETH")
+string smtName0  = smtFut ? str.replace(syminfo.ticker, syminfo.root, smtTo) : smtBtc ? str.replace(syminfo.ticker, "BTC", "ETH") : smtEth ? str.replace(syminfo.ticker, "ETH", "BTC") : smtTo
+bool   smtAutoOk = str.length(smtTo) > 0 or smtBtc or smtEth
+string smtAuto   = not smtAutoOk ? "" : str.contains(smtName0, ":") ? smtName0 : syminfo.prefix + ":" + smtName0
+string smtSym    = SMT_SEL == "Elle" ? SMT_SYM : smtAuto
+bool   smtInv    = SMT_SEL == "Elle" ? SMT_INV : syminfo.ticker == "DXY"
+bool   smtOk     = HTF_ON and HTF_SMT and str.length(smtSym) > 0
+string smtName   = str.length(smtSym) > 0 ? str.split(smtSym, ":").last() : ""
+string smtNote   = smtOk ? " · SMT " + smtName + (smtInv ? " (ters)" : "") : ""
+
+[_, smt1H, smt1L, _, smt1T, _, _] = request.security(smtOk ? smtSym : syminfo.tickerid, htf1Ok ? htf1 : timeframe.period, htfPack(), ignore_invalid_symbol = true)
+[_, smt2H, smt2L, _, smt2T, _, _] = request.security(smtOk ? smtSym : syminfo.tickerid, htf2Ok ? htf2 : timeframe.period, htfPack(), ignore_invalid_symbol = true)
+
+// TradingView en fazla 500 bar ileriye çizer; gerekirse mumlar sıklaşır
+int htfStep = math.min(HTF_STEP, int((490 - HTF_OFF) / HTF_N))
+
+// Mini mumların yerleşeceği dikey alan: son 100 barın aralığı, üst ve alt yarıya bölünür
+float refHi = ta.highest(high, 100)
+float refLo = ta.lowest(low, 100)
+
+var array<box>   htfBoxes  = array.new<box>()
+var array<line>  htfLines  = array.new<line>()
+var array<label> htfLabels = array.new<label>()
+
+scaleY(float p, float gLo, float rng, float bBot, float bTop) => bBot + (p - gLo) / rng * (bTop - bBot)
+
+// Mini grafikteki FVG'ler FVG menüsündeki rengi ve süreyi kullanır; menüde olmayan zaman diliminde süre sınırı yoktur
+fvgColOf(int sec) =>
+    switch sec
+        60      => fv1Col
+        300     => fv2Col
+        900     => fv3Col
+        1800    => fv4Col
+        3600    => fv5Col
+        14400   => fv6Col
+        28800   => fv7Col
+        86400   => fv8Col
+        604800  => fv9Col
+        2628000 => fv10Col
+        => HTF_WICK
+
+fvgExtOf(int sec) =>
+    switch sec
+        60      => extMs(fv1Ext)
+        300     => extMs(fv2Ext)
+        900     => extMs(fv3Ext)
+        1800    => extMs(fv4Ext)
+        3600    => extMs(fv5Ext)
+        14400   => extMs(fv6Ext)
+        28800   => extMs(fv7Ext)
+        86400   => extMs(fv8Ext)
+        604800  => extMs(fv9Ext)
+        2628000 => extMs(fv10Ext)
+        => int(na)
+
+drawGroup(int x0, int stp, int nS, string tf, array<float> o, array<float> h, array<float> l, array<float> c, array<int> t, array<int> d, int tc, float bTop, float bBot, bool titleTop) =>
+    float gHi = h.slice(0, nS).max()
+    float gLo = l.slice(0, nS).min()
+    float rng = gHi - gLo
+    if rng > 0
+        int xEnd = x0 + nS * stp
+        if HTF_GRID
+            for k = 0 to 4
+                float y = scaleY(gLo + rng * k / 4, gLo, rng, bBot, bTop)
+                htfLines.push(line.new(x0, y, xEnd, y, color = color.new(HTF_WICK, 85), style = line.style_dotted))
+        // FVG menüsüyle aynı kural: üç mumun ilkinden başlar, tamamen dolunca veya süresi bitince durur, CE'ye değince orta çizgi soluklaşır
+        if HTF_FVGS
+            int   tfSec = timeframe.in_seconds(tf)
+            color fCol  = fvgColOf(tfSec)
+            int   fExt  = fvgExtOf(tfSec)
+            for i = 1 to nS - 3
+                bool up = l.get(i) > h.get(i + 2)
+                bool dn = h.get(i) < l.get(i + 2)
+                if up or dn
+                    float top   = up ? l.get(i) : l.get(i + 2)
+                    float bot   = up ? h.get(i + 2) : h.get(i)
+                    float fMid  = (top + bot) / 2
+                    int   stopK = 0
+                    bool  ceHit = false
+                    for k = i - 1 to 0
+                        if up ? l.get(k) <= fMid : h.get(k) >= fMid
+                            ceHit := true
+                        if (up ? l.get(k) <= bot : h.get(k) >= top) or (not na(fExt) and t.get(k) >= t.get(i) + fExt)
+                            stopK := k
+                            break
+                    int   xL = x0 + (nS - 3 - i) * stp
+                    int   xR = x0 + (nS - 1 - stopK) * stp
+                    float yM = scaleY(fMid, gLo, rng, bBot, bTop)
+                    htfBoxes.push(box.new(xL, scaleY(top, gLo, rng, bBot, bTop), xR, scaleY(bot, gLo, rng, bBot, bTop), border_color = color.new(fCol, 70), bgcolor = color.new(fCol, 85)))
+                    if FVG_CE
+                        htfLines.push(line.new(xL, yM, xR, yM, color = color.new(fCol, ceHit ? 75 : 0), style = line.style_dashed))
+        string timeFmt = timeframe.in_seconds(tf) < 86400 ? "dd.MM HH:mm" : "dd.MM.yy"
+        string timeTz  = timeframe.in_seconds(tf) == 86400 ? "UTC" : TZ
+        for j = 0 to nS - 1
+            int i = nS - 1 - j   // en eski solda
+            if not na(o.get(i))
+                int   x  = x0 + j * stp
+                float yO = scaleY(o.get(i), gLo, rng, bBot, bTop)
+                float yC = scaleY(c.get(i), gLo, rng, bBot, bTop)
+                color bodyCol = c.get(i) >= o.get(i) ? HTF_UP : HTF_DN
+                // Günlük ayırıcı: ana grafiktekinin rengi ve stiliyle, yeni işlem gününün ilk mumunda
+                if dOn and timeframe.in_seconds(tf) < 86400 and i < nS - 1 and not na(d.get(i + 1)) and d.get(i) != d.get(i + 1)
+                    htfLines.push(line.new(x, bBot, x, bTop, color = dCol, style = lineStyle(dSty), width = dW))
+                // Gövde tek bar genişliğinde, kalınlığını kenar çizgisi verir; böylece mumlar ana grafik sıklığında durur
+                // Kenar: önce HTF_WICK renginde tam kalınlıkta gövde, rengi farklıysa üstüne 2 piksel ince gövde
+                htfLines.push(line.new(x, scaleY(h.get(i), gLo, rng, bBot, bTop), x, scaleY(l.get(i), gLo, rng, bBot, bTop), color = HTF_WICK))
+                htfBoxes.push(box.new(x, math.max(yO, yC), x, math.min(yO, yC), border_color = HTF_WICK, border_width = HTF_PX, bgcolor = HTF_WICK))
+                if bodyCol != HTF_WICK
+                    htfBoxes.push(box.new(x, math.max(yO, yC), x, math.min(yO, yC), border_color = bodyCol, border_width = math.max(1, HTF_PX - 2), bgcolor = bodyCol))
+                // Zaman yazıları iki grubun arasındaki boşlukta durur
+                if HTF_TIME and i % 20 == 0
+                    htfLabels.push(label.new(x, titleTop ? bBot : bTop, str.format_time(t.get(i), timeFmt, timeTz), style = titleTop ? label.style_label_up : label.style_label_down, color = color.new(color.black, 100), textcolor = color.new(HTF_WICK, 30), size = size.normal))
+        if HTF_LAST and not na(c.get(0))
+            float yL  = scaleY(c.get(0), gLo, rng, bBot, bTop)
+            color lCol = c.get(0) >= o.get(0) ? HTF_UP : HTF_DN
+            htfLines.push(line.new(x0, yL, xEnd, yL, color = color.new(lCol, 40), style = line.style_dotted))
+        htfLabels.push(label.new(x0, titleTop ? bTop : bBot, tfLabel(tf) + " · " + fmtLeft(tc - timenow) + smtNote, style = titleTop ? label.style_label_lower_left : label.style_label_upper_left, color = color.new(color.black, 100), textcolor = HTF_WICK, size = size.normal))
+
+// Solunda ve sağında p mumdan daha uç olan swing; eşit tepelerde eskisi sayılır
+isPivot(array<float> a, int i, int p, bool hi) =>
+    bool ok = not na(a.get(i))
+    if ok
+        for k = i - p to i + p
+            if k != i
+                float v = a.get(k)
+                if na(v) or (hi ? v > a.get(i) : v < a.get(i)) or (k < i and v == a.get(i))
+                    ok := false
+                    break
+    ok
+
+// Swing iki sembolde birkaç mum kayabilir; o yüzden aynı zamanın ±p mumundaki en uç mum alınır
+smtIdx(array<float> a, int j, int p, bool hi) =>
+    int best = -1
+    for k = math.max(0, j - p) to math.min(a.size() - 1, j + p)
+        float v = a.get(k)
+        if not na(v) and (best < 0 or (hi ? v > a.get(best) : v < a.get(best)))
+            best := k
+    best
+
+// Bir sembolün art arda iki swing'i, ana grafiğin mum sırasıyla kaydedilir; yeni swing önce gelecek şekilde sıralanabilir
+smtCollect(array<int> keys, array<float> src, array<int> srcT, array<int> t, int nS, bool hi) =>
+    int prev = -1
+    for i = SMT_P + 1 to nS - 1 - SMT_P
+        if isPivot(src, i, SMT_P, hi)
+            int m = t.indexof(srcT.get(i))
+            if m >= 0
+                if prev >= 0 and not keys.includes(prev * 1000 + m)
+                    keys.push(prev * 1000 + m)
+                prev := m
+    keys
+
+// İki sembolden birinin art arda iki swing'inde biri seviyeyi alıp diğeri almadıysa SMT'dir; high'larda bearish, low'larda bullish
+// İki sembolün swing'leri de taranır: aynı uyumsuzluk iki paritenin grafiğinde de aynı mumlar arasında çıkar
+smtSide(int x0, int stp, int nS, array<float> a, array<float> xa, array<int> t, array<int> xT, bool hi, float gLo, float rng, float bBot, float bTop) =>
+    color cl    = hi ? SMT_BEAR : SMT_BULL
+    bool  cHi   = smtInv ? not hi : hi
+    int   found = 0
+    array<int> keys = array.new<int>()
+    array<int> seen = array.new<int>()
+    smtCollect(keys, a, t, t, nS, hi)
+    smtCollect(keys, xa, xT, t, nS, cHi)
+    keys.sort()
+    for key in keys
+        if found < SMT_MAX
+            int cB = int(key / 1000)
+            int cA = key % 1000
+            int jA = xT.indexof(t.get(cA))
+            int jB = xT.indexof(t.get(cB))
+            if jA >= 0 and jB >= 0
+                int eA = smtIdx(a, cA, SMT_P, hi)
+                int eB = smtIdx(a, cB, SMT_P, hi)
+                int oA = smtIdx(xa, jA, SMT_P, cHi)
+                int oB = smtIdx(xa, jB, SMT_P, cHi)
+                // Oluşan mum sayılmaz; iki pencere aynı muma denk gelirse kıyas yapılamaz
+                if eA > eB and eB >= 1 and oA > oB and oB >= 1 and not seen.includes(eB * 1000 + eA)
+                    bool mainTook  = hi ? a.get(eB) > a.get(eA) : a.get(eB) < a.get(eA)
+                    bool otherTook = cHi ? xa.get(oB) > xa.get(oA) : xa.get(oB) < xa.get(oA)
+                    if mainTook != otherTook
+                        seen.push(eB * 1000 + eA)
+                        int   xA = x0 + (nS - 1 - eA) * stp
+                        int   xB = x0 + (nS - 1 - eB) * stp
+                        float yA = scaleY(a.get(eA), gLo, rng, bBot, bTop)
+                        float yB = scaleY(a.get(eB), gLo, rng, bBot, bTop)
+                        htfLines.push(line.new(xA, yA, xB, yB, color = cl, style = line.style_dashed))
+                        htfLabels.push(label.new(xB, yB, CLEAN ? "SMT " + smtName + (otherTook ? " ✓" : " ✗") : "SMT · " + smtName + (otherTook ? " aldı" : " almadı"), style = hi ? label.style_label_down : label.style_label_up, color = color.new(color.black, 100), textcolor = cl, size = size.small))
+                        found += 1
+    found
+
+drawSmt(int x0, int stp, int nS, array<float> h, array<float> l, array<int> t, array<float> xH, array<float> xL, array<int> xT, float bTop, float bBot) =>
+    float gHi = h.slice(0, nS).max()
+    float gLo = l.slice(0, nS).min()
+    float rng = gHi - gLo
+    if rng > 0 and not na(xT)
+        smtSide(x0, stp, nS, h, smtInv ? xL : xH, t, xT, true, gLo, rng, bBot, bTop)
+        smtSide(x0, stp, nS, l, smtInv ? xH : xL, t, xT, false, gLo, rng, bBot, bTop)
+    rng
+
+if barstate.islast
+    for b in htfBoxes
+        b.delete()
+    for ln in htfLines
+        ln.delete()
+    for lb in htfLabels
+        lb.delete()
+    htfBoxes.clear()
+    htfLines.clear()
+    htfLabels.clear()
+    float mid = (refHi + refLo) / 2
+    float pad = (refHi - refLo) * 0.08
+    float ext = (refHi - refLo) * (HTF_H - 100) / 200
+    if htf1Ok and not na(aO)
+        drawGroup(bar_index + HTF_OFF, htfStep, HTF_N, htf1, aO, aH, aL, aC, aT, aD, aTc, refHi + ext, mid + pad, true)
+        if smtOk
+            drawSmt(bar_index + HTF_OFF, htfStep, HTF_N, aH, aL, aT, smt1H, smt1L, smt1T, refHi + ext, mid + pad)
+    if htf2Ok and not na(bO)
+        drawGroup(bar_index + HTF_OFF, htfStep, HTF_N, htf2, bO, bH, bL, bC, bT, bD, bTc, mid - pad, refLo - ext, false)
+        if smtOk
+            drawSmt(bar_index + HTF_OFF, htfStep, HTF_N, bH, bL, bT, smt2H, smt2L, smt2T, mid - pad, refLo - ext)
+
+// ───────────────────────── Ana grafikte SMT ─────────────────────────
+string smtMTf = SMT_MSEL == "Otomatik" ? autoHtf(true) : SMT_MTF
+bool   smtMOk = SMT_MON and str.length(smtSym) > 0 and timeframe.in_seconds(smtMTf) > timeframe.in_seconds()
+
+// HTF bağlamında çalışır: son 100 mum; t iki sembolü eşlemek için, x mumun gerçek açılış zamanı
+smtMPack() =>
+    bool live = reqLive()
+    array<float> h = live ? array.new<float>(100) : na
+    array<float> l = live ? array.new<float>(100) : na
+    array<int>   t = live ? array.new<int>(100) : na
+    array<int>   x = live ? array.new<int>(100) : na
+    if live
+        for i = 0 to 99
+            h.set(i, high[i])
+            l.set(i, low[i])
+            t.set(i, timeframe.isdaily ? time_tradingday[i] : time[i])
+            x.set(i, time[i])
+    [h, l, t, x]
+
+[smH, smL, smT, smX] = request.security(syminfo.tickerid, smtMOk ? smtMTf : timeframe.period, smtMPack())
+[soH, soL, soT, _]   = request.security(smtMOk ? smtSym : syminfo.tickerid, smtMOk ? smtMTf : timeframe.period, smtMPack(), ignore_invalid_symbol = true)
+
+// Çizginin ucu fitilin üstüne otursun diye HTF mumunun içindeki en uç grafik mumu aranır
+var array<float> smtBarH = array.new<float>()
+var array<float> smtBarL = array.new<float>()
+var array<int>   smtBarT = array.new<int>()
+if smtMOk
+    smtBarH.push(high)
+    smtBarL.push(low)
+    smtBarT.push(time)
+    if smtBarT.size() > 3000
+        smtBarH.shift()
+        smtBarL.shift()
+        smtBarT.shift()
+
+smtBarOf(int tFrom, int tTo, bool hi) =>
+    int   best = na
+    float val  = na
+    for k = smtBarT.size() - 1 to 0
+        int tk = smtBarT.get(k)
+        if tk < tFrom
+            break
+        if tk < tTo
+            float v = hi ? smtBarH.get(k) : smtBarL.get(k)
+            if na(val) or (hi ? v > val : v < val)
+                val  := v
+                best := tk
+    na(best) ? tFrom : best
+
+var array<line>  smtMLines  = array.new<line>()
+var array<label> smtMLabels = array.new<label>()
+
+// Mini grafiklerle aynı kural; fark çizimin ana grafikte, gerçek fiyat ve zamanda olması
+smtMainSide(array<float> a, array<float> xa, array<int> t, array<int> x, array<int> xT, bool hi) =>
+    color cl    = hi ? SMT_MBEAR : SMT_MBULL
+    bool  cHi   = smtInv ? not hi : hi
+    int   found = 0
+    array<int> keys = array.new<int>()
+    array<int> seen = array.new<int>()
+    smtCollect(keys, a, t, t, 100, hi)
+    smtCollect(keys, xa, xT, t, 100, cHi)
+    keys.sort()
+    for key in keys
+        if found < SMT_MMAX
+            int cB = int(key / 1000)
+            int cA = key % 1000
+            int jA = xT.indexof(t.get(cA))
+            int jB = xT.indexof(t.get(cB))
+            if jA >= 0 and jB >= 0
+                int eA = smtIdx(a, cA, SMT_P, hi)
+                int eB = smtIdx(a, cB, SMT_P, hi)
+                int oA = smtIdx(xa, jA, SMT_P, cHi)
+                int oB = smtIdx(xa, jB, SMT_P, cHi)
+                if eA > eB and eB >= 1 and oA > oB and oB >= 1 and not seen.includes(eB * 1000 + eA)
+                    bool mainTook  = hi ? a.get(eB) > a.get(eA) : a.get(eB) < a.get(eA)
+                    bool otherTook = cHi ? xa.get(oB) > xa.get(oA) : xa.get(oB) < xa.get(oA)
+                    if mainTook != otherTook
+                        seen.push(eB * 1000 + eA)
+                        int tA = smtBarOf(x.get(eA), x.get(eA - 1), hi)
+                        int tB = smtBarOf(x.get(eB), x.get(eB - 1), hi)
+                        // İlk bulunan en yenisidir; eskiler soluk kalır
+                        color  smC = CLEAN and found > 0 ? color.new(cl, 45) : cl
+                        string smS = CLEAN ? "SMT " + tfLabel(smtMTf) + " " + smtName + (otherTook ? " ✓" : " ✗") : "SMT " + tfLabel(smtMTf) + " · " + smtName + (otherTook ? " aldı" : " almadı")
+                        smtMLines.push(line.new(tA, a.get(eA), tB, a.get(eB), xloc = xloc.bar_time, color = smC, style = line.style_dashed))
+                        smtMLabels.push(label.new(tB, a.get(eB), smS, xloc = xloc.bar_time, style = hi ? label.style_label_down : label.style_label_up, color = color.new(color.black, 100), textcolor = smC, size = size.normal))
+                        found += 1
+    found
+
+if barstate.islast
+    for ln in smtMLines
+        ln.delete()
+    for lb in smtMLabels
+        lb.delete()
+    smtMLines.clear()
+    smtMLabels.clear()
+    if smtMOk and not na(soT) and not na(smT)
+        smtMainSide(smH, smtInv ? soL : soH, smT, smX, soT, true)
+        smtMainSide(smL, smtInv ? soH : soL, smT, smX, soT, false)
