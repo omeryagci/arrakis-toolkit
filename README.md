@@ -5,6 +5,10 @@
 TradingView için ICT tarzı bir zaman ve seviye aracı. Pine Script v6 ile yazıldı.
 An ICT-style time and level toolkit for TradingView, written in Pine Script v6.
 
+> **cTrader** kullanıyorsan: [arrakis-toolkit-ctrader](https://github.com/omeryagci/arrakis-toolkit-ctrader)
+>
+> Using **cTrader**? See [arrakis-toolkit-ctrader](https://github.com/omeryagci/arrakis-toolkit-ctrader)
+
 ![Arrakis Toolkit, EURUSD 5m](images/hero.png)
 
 ---
